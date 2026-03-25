@@ -424,6 +424,32 @@ thead th:hover { color: var(--text); }
 thead th .sort-arrow { margin-left: 4px; font-size: 10px; }
 thead th.original-col { background: #fefce8; color: #92400e; }
 thead th.changed-col { background: #fff7ed; }
+
+/* Sticky Job Title column */
+thead th.sticky-col,
+tbody td.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #f8fafc;
+  border-right: 2px solid var(--accent);
+  min-width: 200px;
+  max-width: 300px;
+  white-space: normal;
+  word-break: break-word;
+}
+tbody td.sticky-col {
+  background: var(--card);
+}
+tbody tr:hover td.sticky-col {
+  background: #f8fafc;
+}
+tbody tr.row-changed td.sticky-col {
+  background: #fffbf5;
+}
+tbody tr.row-changed:hover td.sticky-col {
+  background: #fef3e2;
+}
 tbody td {
   padding: 2px 6px;
   border-bottom: 1px solid var(--border);
@@ -702,14 +728,13 @@ let pageSize = 100;
 let sortState = { column: 'Date', direction: 'desc' };
 
 const TABLE_COLUMNS = [
-  'Id', 'Date', 'Job Title', 'Company',
+  'Id', 'Date', 'Job Title', 'Company', 'Job Description',
   'Min Salary', 'Max Salary', 'Min Salary (Original)', 'Max Salary (Original)', 'Salary Changed',
   'Salary Period', 'Location',
   'Region', 'Region (Original)', 'Region Changed',
   'Function', 'Function (Original)', 'Function Changed',
   'Job Level',
-  'Industry', 'Industry (Original)', 'Industry Changed',
-  'Job Description'
+  'Industry', 'Industry (Original)', 'Industry Changed'
 ];
 
 const ORIGINAL_COLS = new Set([
@@ -1206,8 +1231,9 @@ function renderTable() {
       ? (sortState.direction === 'asc' ? ' ▲' : ' ▼')
       : '';
     let cls = '';
-    if (ORIGINAL_COLS.has(col)) cls = ' class="original-col"';
-    if (CHANGED_COLS.has(col)) cls = ' class="changed-col"';
+    if (col === 'Job Title') cls = ' class="sticky-col"';
+    else if (ORIGINAL_COLS.has(col)) cls = ' class="original-col"';
+    else if (CHANGED_COLS.has(col)) cls = ' class="changed-col"';
     headHtml += `<th${cls} onclick="setSort('${col}')">${col}<span class="sort-arrow">${arrow}</span></th>`;
   });
   headHtml += '</tr>';
@@ -1232,7 +1258,11 @@ function renderTable() {
         let val = row[col];
         if (val == null || val === 'nan' || val === 'NaN' || val === undefined) val = '';
 
-        if (col === 'Min Salary' || col === 'Max Salary') {
+        if (col === 'Job Title') {
+          td.className = 'sticky-col';
+          td.textContent = String(val);
+          if (String(val).length > 30) td.title = String(val);
+        } else if (col === 'Min Salary' || col === 'Max Salary') {
           td.textContent = val ? formatCurrency(Number(val), row['Salary Period']) : '';
         } else if (col === 'Min Salary (Original)' || col === 'Max Salary (Original)') {
           td.className = 'original-cell';

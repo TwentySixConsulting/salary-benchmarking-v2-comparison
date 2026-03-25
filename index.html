@@ -450,6 +450,17 @@ tbody tr.row-changed td.sticky-col {
 tbody tr.row-changed:hover td.sticky-col {
   background: #fef3e2;
 }
+
+/* Compact industry columns */
+tbody td.industry-cell {
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+thead th.industry-col {
+  max-width: 160px;
+}
 tbody td {
   padding: 2px 6px;
   border-bottom: 1px solid var(--border);
@@ -1232,6 +1243,7 @@ function renderTable() {
       : '';
     let cls = '';
     if (col === 'Job Title') cls = ' class="sticky-col"';
+    else if (col === 'Industry' || col === 'Industry (Original)') cls = ` class="${ORIGINAL_COLS.has(col) ? 'original-col ' : ''}industry-col"`;
     else if (ORIGINAL_COLS.has(col)) cls = ' class="original-col"';
     else if (CHANGED_COLS.has(col)) cls = ' class="changed-col"';
     headHtml += `<th${cls} onclick="setSort('${col}')">${col}<span class="sort-arrow">${arrow}</span></th>`;
@@ -1282,6 +1294,9 @@ function renderTable() {
           td.textContent = full.length > 300 ? full.substring(0, 300) + '...' : full;
           if (full.length > 30) td.title = full;
         } else {
+          if (col === 'Industry' || col === 'Industry (Original)') {
+            td.className = (col === 'Industry (Original)') ? 'original-cell industry-cell' : 'industry-cell';
+          }
           td.textContent = String(val);
           if (String(val).length > 30) td.title = String(val);
         }

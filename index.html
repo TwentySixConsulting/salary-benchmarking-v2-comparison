@@ -946,9 +946,6 @@ function updateValidationProgress() {
     </div>`;
 }
 
-// Validation filter state
-filters.validationFilter = 'all'; // 'all' | 'unreviewed' | 'reviewed'
-
 const ORIGINAL_COLS = new Set([
   'Region (Original)', 'Function (Original)', 'Industry (Original)',
   'Min Salary (Original)', 'Max Salary (Original)'
@@ -981,6 +978,7 @@ const filters = {
   functionChanged: false,
   industryChanged: false,
   salaryChanged: false,
+  validationFilter: 'all',   // 'all' | 'unreviewed' | 'reviewed'
 };
 
 const JOB_LEVEL_ORDER = [

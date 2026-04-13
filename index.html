@@ -373,6 +373,91 @@ body {
   white-space: nowrap;
 }
 
+/* Validation columns */
+thead th.validation-col {
+  background: #f0f4ff;
+  color: #1e40af;
+  min-width: 140px;
+}
+tbody td.validation-cell {
+  min-width: 140px;
+  white-space: nowrap;
+  padding: 2px 4px;
+}
+.validation-cell select {
+  font-size: 10px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  width: 100%;
+  max-width: 130px;
+}
+.validation-cell select.status-v2 { background: #f0fdf4; border-color: #86efac; }
+.validation-cell select.status-original { background: #fef9c3; border-color: #fde047; }
+.validation-cell select.status-other { background: #ede9fe; border-color: #c4b5fd; }
+.validation-cell input[type="text"] {
+  font-size: 10px;
+  padding: 2px 4px;
+  border: 1px solid #c4b5fd;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 130px;
+  margin-top: 2px;
+  display: block;
+}
+.validation-na {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+}
+
+/* Validation progress bar */
+.validation-progress {
+  margin-top: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.validation-progress h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.progress-bar-track {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  transition: width 0.3s;
+}
+.progress-stats {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.export-validation-btn {
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-left: 8px;
+}
+.export-validation-btn:hover { opacity: 0.9; }
+
 /* Table */
 .table-toolbar {
   display: flex;
@@ -399,7 +484,7 @@ body {
 }
 .table-scroll { overflow-x: auto; }
 table {
-  min-width: 2400px;
+  min-width: 2900px;
   border-collapse: collapse;
   font-size: 12px;
   table-layout: auto;
@@ -709,6 +794,7 @@ tbody tr.row-changed:hover { background: #fef3e2; }
         </div>
       </div>
       <button class="export-btn" onclick="exportCSV()">Download CSV</button>
+      <button class="export-validation-btn" onclick="exportValidationCSV()">Export Validations</button>
     </div>
     <div class="table-container">
       <div class="table-scroll">
@@ -747,6 +833,121 @@ const TABLE_COLUMNS = [
   'Job Level',
   'Industry', 'Industry (Original)', 'Industry Changed'
 ];
+
+// ─── Validation ──────────────────────────────────────────────────────────────
+
+// Which columns get a validation column after them
+const VALIDATION_AFTER = {
+  'Region Changed': 'Region',
+  'Function Changed': 'Function',
+  'Industry Changed': 'Industry',
+  'Salary Changed': 'Salary'
+};
+
+const VALIDATION_FIELDS = ['Region', 'Function', 'Industry', 'Salary'];
+const STORAGE_KEY = 'v2_validations';
+
+let validations = {};
+try {
+  validations = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+} catch(e) { validations = {}; }
+
+function saveValidation(id, field, status, customValue) {
+  const key = String(id);
+  if (!validations[key]) validations[key] = {};
+  validations[key][field + '_status'] = status;
+  validations[key][field + '_value'] = customValue || '';
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(validations));
+  updateValidationProgress();
+}
+
+function getValidation(id, field) {
+  const key = String(id);
+  if (!validations[key]) return { status: '', value: '' };
+  return {
+    status: validations[key][field + '_status'] || '',
+    value: validations[key][field + '_value'] || ''
+  };
+}
+
+function handleValidationChange(id, field, selectEl) {
+  const status = selectEl.value;
+  const cell = selectEl.parentElement;
+
+  // Update select styling
+  selectEl.className = '';
+  if (status === 'v2_correct') selectEl.className = 'status-v2';
+  else if (status === 'original_correct') selectEl.className = 'status-original';
+  else if (status === 'other') selectEl.className = 'status-other';
+
+  // Remove existing text input if any
+  const existing = cell.querySelector('input[type="text"]');
+  if (existing) existing.remove();
+
+  if (status === 'other') {
+    const v = getValidation(id, field);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Enter correct value';
+    input.value = v.value;
+    input.onchange = function() { saveValidation(id, field, 'other', this.value); };
+    cell.appendChild(input);
+    saveValidation(id, field, 'other', v.value);
+  } else {
+    saveValidation(id, field, status, '');
+  }
+}
+
+function getChangedRecordFields() {
+  // Returns array of {id, field} for all records that have a change
+  const result = [];
+  allData.forEach(row => {
+    const id = row['Id'];
+    if (fieldChanged(row, 'Region Changed')) result.push({ id, field: 'Region' });
+    if (fieldChanged(row, 'Function Changed')) result.push({ id, field: 'Function' });
+    if (fieldChanged(row, 'Industry Changed')) result.push({ id, field: 'Industry' });
+    if (fieldChanged(row, 'Salary Changed')) result.push({ id, field: 'Salary' });
+  });
+  return result;
+}
+
+function updateValidationProgress() {
+  const el = document.getElementById('validationProgress');
+  if (!el) return;
+
+  const items = getChangedRecordFields();
+  const total = items.length;
+  if (total === 0) {
+    el.innerHTML = '<h4>Validation Progress</h4><div style="font-size:11px;color:var(--text-muted);">No changes to validate</div>';
+    return;
+  }
+
+  let reviewed = 0;
+  let v2Count = 0, origCount = 0, otherCount = 0;
+  items.forEach(({ id, field }) => {
+    const v = getValidation(id, field);
+    if (v.status) {
+      reviewed++;
+      if (v.status === 'v2_correct') v2Count++;
+      else if (v.status === 'original_correct') origCount++;
+      else if (v.status === 'other') otherCount++;
+    }
+  });
+
+  const pct = (reviewed / total * 100).toFixed(1);
+  el.innerHTML = `
+    <h4>Validation Progress</h4>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" style="width:${pct}%"></div>
+    </div>
+    <div class="progress-stats">
+      <span>${reviewed} / ${total} reviewed (${pct}%)</span>
+      <span>V2: ${v2Count} | Orig: ${origCount} | Other: ${otherCount}</span>
+    </div>`;
+}
+
+// Validation filter state
+filters.validationFilter = 'all'; // 'all' | 'unreviewed' | 'reviewed'
 
 const ORIGINAL_COLS = new Set([
   'Region (Original)', 'Function (Original)', 'Industry (Original)',
@@ -815,6 +1016,7 @@ Papa.parse('comparison_data.csv', {
 
     buildSidebar();
     applyFilters();
+    updateValidationProgress();
     document.getElementById('loading').style.display = 'none';
   }
 });
@@ -908,6 +1110,18 @@ function buildSidebar() {
       </div>
     </details>`;
 
+  // Validation filter
+  html += `
+    <div class="change-filter-section">
+      <div class="section-title">Validation Status</div>
+      <div class="radio-group">
+        <label><input type="radio" name="validationFilter" value="all" checked onchange="setValidationFilter('all')"> Show All</label>
+        <label><input type="radio" name="validationFilter" value="unreviewed" onchange="setValidationFilter('unreviewed')"> Unreviewed Only</label>
+        <label><input type="radio" name="validationFilter" value="reviewed" onchange="setValidationFilter('reviewed')"> Reviewed Only</label>
+      </div>
+      <div class="validation-progress" id="validationProgress"></div>
+    </div>`;
+
   html += `<button class="reset-btn" onclick="resetFilters()">Reset All Filters</button>`;
 
   sb.innerHTML = html;
@@ -920,6 +1134,11 @@ function buildSidebar() {
 
 function setChangeStatus(status) {
   filters.changeStatus = status;
+  applyFilters();
+}
+
+function setValidationFilter(status) {
+  filters.validationFilter = status;
   applyFilters();
 }
 
@@ -978,6 +1197,8 @@ function resetFilters() {
   document.getElementById('chk_functionChanged').checked = false;
   document.getElementById('chk_industryChanged').checked = false;
   document.getElementById('chk_salaryChanged').checked = false;
+  filters.validationFilter = 'all';
+  document.querySelectorAll('input[name="validationFilter"]').forEach(r => r.checked = r.value === 'all');
   applyFilters();
 }
 
@@ -1034,6 +1255,27 @@ function applyFilters() {
     if (filters.functionChanged && !fieldChanged(row, 'Function Changed')) return false;
     if (filters.industryChanged && !fieldChanged(row, 'Industry Changed')) return false;
     if (filters.salaryChanged && !fieldChanged(row, 'Salary Changed')) return false;
+
+    // Validation filter
+    if (filters.validationFilter && filters.validationFilter !== 'all') {
+      const hasAnyChange = isChanged(row);
+      if (!hasAnyChange) {
+        // Non-changed rows have nothing to validate — hide in both modes
+        if (filters.validationFilter === 'unreviewed' || filters.validationFilter === 'reviewed') return false;
+      } else {
+        const id = row['Id'];
+        let hasReview = false;
+        VALIDATION_FIELDS.forEach(field => {
+          const changedCol = field === 'Salary' ? 'Salary Changed' : field + ' Changed';
+          if (fieldChanged(row, changedCol)) {
+            const v = getValidation(id, field);
+            if (v.status) hasReview = true;
+          }
+        });
+        if (filters.validationFilter === 'unreviewed' && hasReview) return false;
+        if (filters.validationFilter === 'reviewed' && !hasReview) return false;
+      }
+    }
 
     return true;
   });
@@ -1247,6 +1489,11 @@ function renderTable() {
     else if (ORIGINAL_COLS.has(col)) cls = ' class="original-col"';
     else if (CHANGED_COLS.has(col)) cls = ' class="changed-col"';
     headHtml += `<th${cls} onclick="setSort('${col}')">${col}<span class="sort-arrow">${arrow}</span></th>`;
+
+    // Add validation column header after each "Changed" column
+    if (VALIDATION_AFTER[col]) {
+      headHtml += `<th class="validation-col">${VALIDATION_AFTER[col]} Validation</th>`;
+    }
   });
   headHtml += '</tr>';
   thead.innerHTML = headHtml;
@@ -1257,13 +1504,15 @@ function renderTable() {
   const end = Math.min(start + pageSize, filteredData.length);
   const pageData = filteredData.slice(start, end);
 
+  const totalCols = TABLE_COLUMNS.length + Object.keys(VALIDATION_AFTER).length;
   if (pageData.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="${TABLE_COLUMNS.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No matching records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align:center;padding:40px;color:var(--text-muted);">No matching records</td></tr>`;
   } else {
     const fragment = document.createDocumentFragment();
     pageData.forEach(row => {
       const tr = document.createElement('tr');
       if (isChanged(row)) tr.className = 'row-changed';
+      const rowId = row['Id'];
 
       TABLE_COLUMNS.forEach(col => {
         const td = document.createElement('td');
@@ -1301,6 +1550,36 @@ function renderTable() {
           if (String(val).length > 30) td.title = String(val);
         }
         tr.appendChild(td);
+
+        // Add validation cell after each "Changed" column
+        if (VALIDATION_AFTER[col]) {
+          const vtd = document.createElement('td');
+          vtd.className = 'validation-cell';
+          const field = VALIDATION_AFTER[col];
+          const changed = fieldChanged(row, col);
+
+          if (changed) {
+            const v = getValidation(rowId, field);
+            const selectClass = v.status === 'v2_correct' ? 'status-v2'
+              : v.status === 'original_correct' ? 'status-original'
+              : v.status === 'other' ? 'status-other' : '';
+
+            let html = `<select class="${selectClass}" onchange="handleValidationChange(${rowId}, '${field}', this)">
+              <option value="">-- Review --</option>
+              <option value="v2_correct"${v.status === 'v2_correct' ? ' selected' : ''}>V2 Correct</option>
+              <option value="original_correct"${v.status === 'original_correct' ? ' selected' : ''}>Original Correct</option>
+              <option value="other"${v.status === 'other' ? ' selected' : ''}>Other</option>
+            </select>`;
+            if (v.status === 'other') {
+              html += `<input type="text" value="${escHtml(v.value)}" placeholder="Enter correct value"
+                onchange="saveValidation(${rowId}, '${field}', 'other', this.value)">`;
+            }
+            vtd.innerHTML = html;
+          } else {
+            vtd.innerHTML = '<span class="validation-na">N/A</span>';
+          }
+          tr.appendChild(vtd);
+        }
       });
       fragment.appendChild(tr);
     });
@@ -1390,6 +1669,10 @@ function updateChips() {
   if (filters.functionChanged) html += `<span class="chip">Function Changed <span class="chip-remove" onclick="filters.functionChanged=false; document.getElementById('chk_functionChanged').checked=false; applyFilters();">×</span></span>`;
   if (filters.industryChanged) html += `<span class="chip">Industry Changed <span class="chip-remove" onclick="filters.industryChanged=false; document.getElementById('chk_industryChanged').checked=false; applyFilters();">×</span></span>`;
   if (filters.salaryChanged) html += `<span class="chip">Salary Changed <span class="chip-remove" onclick="filters.salaryChanged=false; document.getElementById('chk_salaryChanged').checked=false; applyFilters();">×</span></span>`;
+
+  if (filters.validationFilter && filters.validationFilter !== 'all') {
+    html += `<span class="chip">Validation: ${filters.validationFilter} <span class="chip-remove" onclick="setValidationFilter('all'); document.querySelector('input[name=validationFilter][value=all]').checked=true;">×</span></span>`;
+  }
 
   bar.innerHTML = html;
 }
@@ -1879,7 +2162,16 @@ function updateDistributionChart(annual) {
 function exportCSV() {
   const exportData = filteredData.map(row => {
     const out = {};
-    TABLE_COLUMNS.forEach(col => out[col] = row[col]);
+    TABLE_COLUMNS.forEach(col => {
+      out[col] = row[col];
+      // Add validation columns after each Changed column
+      if (VALIDATION_AFTER[col]) {
+        const field = VALIDATION_AFTER[col];
+        const v = getValidation(row['Id'], field);
+        out[field + ' Validation'] = v.status || '';
+        out[field + ' Correct Value'] = v.value || '';
+      }
+    });
     return out;
   });
   const csv = Papa.unparse(exportData);
@@ -1888,6 +2180,59 @@ function exportCSV() {
   const a = document.createElement('a');
   a.href = url;
   a.download = 'v2_comparison_export.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportValidationCSV() {
+  // Export only records that have at least one validation
+  const exportData = [];
+  allData.forEach(row => {
+    const id = row['Id'];
+    let hasValidation = false;
+    const out = {
+      'Id': id,
+      'Job Title': row['Job Title'],
+      'Company': row['Company'],
+      'Location': row['Location'],
+      'Salary Period': row['Salary Period']
+    };
+
+    VALIDATION_FIELDS.forEach(field => {
+      const changedCol = field === 'Salary' ? 'Salary Changed' : field + ' Changed';
+      const changed = fieldChanged(row, changedCol);
+      const v = getValidation(id, field);
+
+      if (field === 'Salary') {
+        out['Min Salary (V2)'] = row['Min Salary'];
+        out['Max Salary (V2)'] = row['Max Salary'];
+        out['Min Salary (Original)'] = row['Min Salary (Original)'];
+        out['Max Salary (Original)'] = row['Max Salary (Original)'];
+      } else {
+        out[field + ' (V2)'] = row[field];
+        out[field + ' (Original)'] = row[field + ' (Original)'];
+      }
+      out[field + ' Changed'] = changed ? 'Yes' : 'No';
+      out[field + ' Validation'] = v.status ? v.status.replace(/_/g, ' ') : '';
+      out[field + ' Correct Value'] = v.value || '';
+
+      if (v.status) hasValidation = true;
+    });
+
+    if (hasValidation) exportData.push(out);
+  });
+
+  if (exportData.length === 0) {
+    alert('No validations have been recorded yet. Review some records first.');
+    return;
+  }
+
+  const csv = Papa.unparse(exportData);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'v2_validation_results.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
